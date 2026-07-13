@@ -1,0 +1,10 @@
+name: mise-moon-backend-plugin 
+version: 1.0.0
+description: APM project for mise-moon-backend-plugin
+author: ngicks
+dependencies:
+  apm:
+  - github.com/ngicks/agents-package/apm-package/cc-workers
+  - ngicks/agents-package/skills/ngplan
+  mcp: []
+scripts: {}

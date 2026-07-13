@@ -1,0 +1,83 @@
+lockfile_version: '1'
+generated_at: '2026-07-13T14:29:50.625269+00:00'
+apm_version: 0.24.1
+dependencies:
+- repo_url: ngicks/agents-package
+  name: cc-workers
+  host: github.com
+  resolved_commit: 86fae700ed8d82fa6528819bf6e423473b79eadf
+  version: 0.0.1
+  virtual_path: apm-package/cc-workers
+  is_virtual: true
+  package_type: marketplace_plugin
+  deployed_files:
+  - .agents/skills/ng-command-invoker
+  - .agents/skills/ng-command-invoker/SKILL.md
+  - .agents/skills/ng-explorer
+  - .agents/skills/ng-explorer/SKILL.md
+  - .agents/skills/ng-implementer
+  - .agents/skills/ng-implementer/SKILL.md
+  - .agents/skills/ng-orchestrator
+  - .agents/skills/ng-orchestrator/SKILL.md
+  - .agents/skills/ng-reviewer
+  - .agents/skills/ng-reviewer/SKILL.md
+  - .claude/agents/ng-command-invoker.md
+  - .claude/agents/ng-explorer.md
+  - .claude/agents/ng-implementer.md
+  - .claude/agents/ng-reviewer.md
+  - .claude/agents/ng-test-runner.md
+  - .claude/skills/ng-command-invoker
+  - .claude/skills/ng-command-invoker/SKILL.md
+  - .claude/skills/ng-explorer
+  - .claude/skills/ng-explorer/SKILL.md
+  - .claude/skills/ng-implementer
+  - .claude/skills/ng-implementer/SKILL.md
+  - .claude/skills/ng-orchestrator
+  - .claude/skills/ng-orchestrator/SKILL.md
+  - .claude/skills/ng-reviewer
+  - .claude/skills/ng-reviewer/SKILL.md
+  - .codex/agents/ng-command-invoker.toml
+  - .codex/agents/ng-explorer.toml
+  - .codex/agents/ng-implementer.toml
+  - .codex/agents/ng-reviewer.toml
+  - .codex/agents/ng-test-runner.toml
+  deployed_file_hashes:
+    .agents/skills/ng-command-invoker/SKILL.md: sha256:f4048af82a2d5836b9ac77dbcdfd010ced96708476972c122fb55d18f6e16942
+    .agents/skills/ng-explorer/SKILL.md: sha256:c9c1de9dbee6bfc8a3111bdffd456357c642434ef32a2276e085098eefdbf93e
+    .agents/skills/ng-implementer/SKILL.md: sha256:74b75a94afee2306386307ce6e5eb8fa73f92c2a9c26e62f275621d848f4a643
+    .agents/skills/ng-orchestrator/SKILL.md: sha256:6b57df58228bad0a6574ca7f1d4668c27bbe12254f0ef6c7a7dccea586a70dbd
+    .agents/skills/ng-reviewer/SKILL.md: sha256:226e5af4a8017b7075314e5b92622f33c194e5fe60838dc3f5d2d6c71301297c
+    .claude/agents/ng-command-invoker.md: sha256:2ebc19b040196a2bdcc1e7185897acf83e4392c3ec02747b72de32030d8185d8
+    .claude/agents/ng-explorer.md: sha256:29095f6a95997443a7e0958045272966ee81b3b5c76252a66e2ac8178599f42c
+    .claude/agents/ng-implementer.md: sha256:90118cdc367dca1c84adbffd5f03f2b796b2694a06f4e366a22b7042edeac189
+    .claude/agents/ng-reviewer.md: sha256:273a02dddf8643c0102d9c16de537517d532563bf4749d2d29599a5ca4009abf
+    .claude/agents/ng-test-runner.md: sha256:2b6b1188560b9749dd3910fd4fe3479398ceac59ee5d993f71a2a070167e250c
+    .claude/skills/ng-command-invoker/SKILL.md: sha256:f4048af82a2d5836b9ac77dbcdfd010ced96708476972c122fb55d18f6e16942
+    .claude/skills/ng-explorer/SKILL.md: sha256:c9c1de9dbee6bfc8a3111bdffd456357c642434ef32a2276e085098eefdbf93e
+    .claude/skills/ng-implementer/SKILL.md: sha256:74b75a94afee2306386307ce6e5eb8fa73f92c2a9c26e62f275621d848f4a643
+    .claude/skills/ng-orchestrator/SKILL.md: sha256:6b57df58228bad0a6574ca7f1d4668c27bbe12254f0ef6c7a7dccea586a70dbd
+    .claude/skills/ng-reviewer/SKILL.md: sha256:226e5af4a8017b7075314e5b92622f33c194e5fe60838dc3f5d2d6c71301297c
+    .codex/agents/ng-command-invoker.toml: sha256:71e65ace87b27b4fea573f0ffe84ce99652a33b0cab540b4f65e959b4489ac6b
+    .codex/agents/ng-explorer.toml: sha256:9937070e48601b6356021b525856f4e7b95f3fc93b6e239fca5c06091b98279c
+    .codex/agents/ng-implementer.toml: sha256:b4e25d1e0bc34c2682409ef73e5c636f332e08c66c29a00422e30da10d349950
+    .codex/agents/ng-reviewer.toml: sha256:9d14ee18cc710b34acaa1c44cdbc9c5dbb7ee9897ec0ebf4a82313a16eec325d
+    .codex/agents/ng-test-runner.toml: sha256:e121ea80d32dfd1c23fb4b17bbeb70a6a1b458d4a840db915a9e6300527ba3c2
+  content_hash: sha256:ea019b4884924f0c8b9f7095ffe533210155198526d89de5ed0ad43f094a5e76
+  declared_license: MIT
+- repo_url: ngicks/agents-package
+  name: ngplan
+  host: github.com
+  resolved_commit: 86fae700ed8d82fa6528819bf6e423473b79eadf
+  version: 1.0.0
+  virtual_path: skills/ngplan
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/ngplan
+  - .agents/skills/ngplan/SKILL.md
+  - .claude/skills/ngplan
+  - .claude/skills/ngplan/SKILL.md
+  deployed_file_hashes:
+    .agents/skills/ngplan/SKILL.md: sha256:ec573a5b5d0b6c61e0738c91c8d768953af9d407b86f122113b3d8b9ca07d7a0
+    .claude/skills/ngplan/SKILL.md: sha256:ec573a5b5d0b6c61e0738c91c8d768953af9d407b86f122113b3d8b9ca07d7a0
+  content_hash: sha256:96a6356649a8569043582fc6d87a18eec5c498b9696013d6965165edee5d0489
