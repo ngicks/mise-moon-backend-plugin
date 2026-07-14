@@ -1,42 +1,54 @@
 #!/usr/bin/env bash
-#MISE description="Run backend plugin tests - test plugin linking and basic functionality"
+#MISE description="Run backend plugin tests - install MoonBit executables from the registry and git"
 set -euo pipefail
 
 # Link the plugin for testing
-mise plugin link --force <BACKEND> .
+mise plugin link --force moon .
 
 # Clear cache to ensure fresh testing
 mise cache clear
 
-# Test that the plugin can list tools (this should work even if no tools are available)
-echo "Testing plugin linking and basic functionality..."
+# A registry module whose main package builds an executable named `moongrep`
+TEST_TOOL="moonbit-community/moongrep"
+TEST_BIN="moongrep"
+TEST_GIT_URL="https://github.com/moonbit-community/moongrep"
+# A repository with `v`-prefixed tags, for testing the tag_prefix option
+TEST_TAGGED_GIT_URL="https://github.com/moonbitlang/x"
 
-# Try to list available versions for a test tool
-# Note: This will likely fail until you implement the backend methods
-# Replace <TEST_TOOL> with a real tool name your backend supports
-TEST_TOOL="<TEST_TOOL>"
+echo "Testing registry version listing for ${TEST_TOOL}..."
+mise ls-remote "moon:${TEST_TOOL}"
+echo "✓ Registry version listing works"
 
-echo "Testing version listing for ${TEST_TOOL}..."
-if mise ls-remote <BACKEND>:${TEST_TOOL} 2>/dev/null; then
-    echo "✓ Version listing works"
-else
-    echo "⚠ Version listing failed - implement backend_list_versions.lua for your backend"
-fi
+echo "Testing registry installation..."
+mise install "moon:${TEST_TOOL}@latest"
+echo "✓ Registry installation works"
 
-# Test installation if versions are available
-echo "Testing installation..."
-if mise install <BACKEND>:${TEST_TOOL}@latest 2>/dev/null; then
-    echo "✓ Installation works"
-    
-    # Test that the tool can be executed
-    if mise exec <BACKEND>:${TEST_TOOL}@latest -- ${TEST_TOOL} --version 2>/dev/null; then
-        echo "✓ Tool execution works"
-    else
-        echo "⚠ Tool execution failed - check backend_exec_env.lua implementation"
-    fi
-else
-    echo "⚠ Installation failed - implement backend_install.lua for your backend"
-fi
+echo "Testing execution..."
+mise exec "moon:${TEST_TOOL}@latest" -- "${TEST_BIN}" --help >/dev/null
+echo "✓ Tool execution works"
 
-echo "✓ Basic plugin structure tests completed"
-echo "Note: Replace <TEST_TOOL> with a real tool and implement the backend methods"
+echo "Testing git version listing (untagged repo falls back to HEAD commit)..."
+mise ls-remote "moon:${TEST_GIT_URL}" | grep -qE '^[0-9a-f]{12}$'
+echo "✓ Git HEAD fallback works"
+
+echo "Testing git version listing with tag_prefix option..."
+tmpdir=$(mktemp -d)
+trap 'rm -rf "${tmpdir}"' EXIT
+cat > "${tmpdir}/mise.toml" <<EOF
+[tools]
+"moon:${TEST_TAGGED_GIT_URL}" = { version = "latest", tag_prefix = "v" }
+EOF
+mise trust "${tmpdir}/mise.toml"
+(cd "${tmpdir}" && mise ls-remote "moon:${TEST_TAGGED_GIT_URL}") | grep -qE '^0\.'
+echo "✓ Git tag listing with tag_prefix works"
+
+echo "Testing git installation from a branch..."
+mise install "moon:${TEST_GIT_URL}@main"
+mise exec "moon:${TEST_GIT_URL}@main" -- "${TEST_BIN}" --help >/dev/null
+echo "✓ Git installation works"
+
+echo "Testing git version listing with a #path fragment..."
+mise ls-remote "moon:${TEST_GIT_URL}#..." | grep -qE '^[0-9a-f]{12}$'
+echo "✓ Fragment tool names work"
+
+echo "✓ All tests passed"

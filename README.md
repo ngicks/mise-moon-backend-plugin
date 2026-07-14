@@ -1,327 +1,147 @@
-# mise backend plugin template
+# mise-moon-backend-plugin
 
-This is a GitHub template for building a mise backend plugin using the vfox-style backend architecture.
+A [mise](https://mise.jdx.dev) backend plugin that installs [MoonBit](https://www.moonbitlang.com/) executables from the [mooncakes.io](https://mooncakes.io) registry using `moon install`.
 
-## What are Backend Plugins?
+## Prerequisites
 
-Backend plugins in mise extend the standard tool plugin system to manage **multiple tools** using the `plugin:tool` format. They're perfect for:
+- The MoonBit toolchain (`moon`, `moonc`) must be installed and on `PATH` — see the [MoonBit download page](https://www.moonbitlang.com/download/)
+- Executables are built from source, so native targets also need a C compiler
 
-- **Package managers** (npm, pip, cargo, gem)
-- **Tool families** (multiple related tools from one ecosystem) 
-- **Custom installations** that need to manage many tools
+## Installation
 
-Unlike tool plugins that manage one tool, backend plugins can install and manage multiple tools like `npm:prettier`, `npm:eslint`, `cargo:ripgrep`, etc.
-
-## Using this template
-
-### Option 1: Use GitHub's template feature (recommended)
-1. Click "Use this template" button on GitHub
-2. Name your repository (e.g., `mise-mybackend` or `vfox-mybackend`)
-3. Clone your new repository
-4. Follow the setup instructions below
-
-### Option 2: Clone and modify
 ```bash
-git clone https://github.com/jdx/mise-backend-plugin-template mise-mybackend
-cd mise-mybackend
-rm -rf .git
-git init
+mise plugin install moon https://github.com/ngicks/mise-moon-backend-plugin
 ```
 
-## Setup Instructions
+## Usage
 
-### 1. Replace placeholders
+### Registry tools (mooncakes.io)
 
-Search and replace these placeholders throughout the project:
-- `<BACKEND>` → your backend name (e.g., `npm`, `cargo`, `pip`)
-- `<GITHUB_USER>` → your GitHub username or organization  
-- `<TEST_TOOL>` → a real tool name your backend can install (for testing)
+Tools are referenced as `moon:<user>/<module>[/<path/to/pkg>]`, mirroring `moon install`'s registry source format:
 
-Files to update:
-- `metadata.lua` - Update name, description, author, homepage
-- `hooks/*.lua` - Replace placeholders and implement your backend logic
-- `mise-tasks/test` - Update test tool name and commands
-- `README.md` - Update this file with your backend's information
+| Tool spec | What it installs |
+|-----------|------------------|
+| `moon:user/module` | Every main package in the module (equivalent to `moon install user/module/...`) |
+| `moon:user/module/path/to/pkg` | A single main package |
+| `moon:user/module/path/...` | All main packages under a path prefix |
 
-### 2. Implement the backend hooks
+Versions are the module's versions on mooncakes.io.
 
-Backend plugins require three main hooks:
-
-#### `hooks/backend_list_versions.lua`
-Lists available versions for a tool in your backend.
-
-```lua
-function PLUGIN:BackendListVersions(ctx)
-    local tool = ctx.tool
-    -- Your logic to fetch versions for the tool
-    -- Return: {versions = {"1.0.0", "1.1.0", "2.0.0"}}
-end
-```
-
-**Examples**:
-- **API-based**: Query npm registry, PyPI, crates.io APIs
-- **Command-based**: Run `npm view <tool> versions`, `pip index versions <tool>`
-- **File-based**: Parse registry files or manifests
-
-#### `hooks/backend_install.lua` 
-Installs a specific version of a tool.
-
-```lua
-function PLUGIN:BackendInstall(ctx)
-    local tool = ctx.tool
-    local version = ctx.version  
-    local install_path = ctx.install_path
-    -- Your logic to install the tool
-    -- Return: {}
-end
-```
-
-**Examples**:
-- **Package manager**: `npm install <tool>@<version>`, `pip install <tool>==<version>`
-- **Download & extract**: Download binary/archive and extract to install_path
-- **Build from source**: Clone repository, checkout version, build and install
-
-#### `hooks/backend_exec_env.lua`
-Sets up environment variables for a tool.
-
-```lua
-function PLUGIN:BackendExecEnv(ctx)
-    local install_path = ctx.install_path
-    -- Your logic to set up environment
-    -- Return: {env_vars = {{key = "PATH", value = install_path .. "/bin"}}}
-end
-```
-
-**Examples**:
-- **Basic**: Add `bin/` directory to PATH
-- **Complex**: Set tool-specific environment variables, library paths
-- **Ecosystem-specific**: Like `node_modules/.bin` for npm, site-packages for Python
-
-### 3. Platform considerations
-
-Your backend may need to handle different operating systems:
-
-```lua
--- Available in all hooks via RUNTIME object
-if RUNTIME.osType == "Darwin" then
-    -- macOS-specific logic
-elseif RUNTIME.osType == "Linux" then  
-    -- Linux-specific logic
-elseif RUNTIME.osType == "Windows" then
-    -- Windows-specific logic
-end
-```
-
-### 4. Error handling
-
-Provide meaningful error messages:
-
-```lua
-function PLUGIN:BackendListVersions(ctx)
-    local tool = ctx.tool
-    
-    if not tool or tool == "" then
-        error("Tool name cannot be empty")
-    end
-    
-    -- ... your implementation ...
-    
-    if #versions == 0 then
-        error("No versions found for " .. tool)
-    end
-    
-    return {versions = versions}
-end
-```
-
-## Development Workflow
-
-### Setting up development environment
-
-1. Install pre-commit hooks (optional but recommended):
 ```bash
-hk install
+# List available versions
+mise ls-remote moon:moonbit-community/moongrep
+
+# Install
+mise install moon:moonbit-community/moongrep@latest
+
+# Use
+mise use -g moon:moonbit-community/moongrep@latest
+moongrep --help
 ```
 
-This sets up automatic linting and formatting on git commits.
+Or in `mise.toml`:
 
-### Local Testing
-
-1. Link your plugin for development:
-```bash
-mise plugin link --force <BACKEND> .
+```toml
+[tools]
+"moon:moonbit-community/moongrep" = "latest"
 ```
 
-2. Test version listing:
+### Git repositories
+
+A tool whose name is an `https://` (or `git://`) URL is installed from that git repository. Like the `go:` backend, the version part may be a tag, a branch name, or a commit hash — the plugin figures out which:
+
 ```bash
-mise ls-remote <BACKEND>:<some-tool>
+mise install "moon:https://github.com/owner/repo@1.2.3"     # tag (also matches v1.2.3)
+mise install "moon:https://github.com/owner/repo@main"      # branch
+mise install "moon:https://github.com/owner/repo@abc1234"   # commit hash
+mise install "moon:https://github.com/owner/repo@latest"    # newest tag, or HEAD commit if untagged
 ```
 
-3. Test installation:
-```bash
-mise install <BACKEND>:<some-tool>@latest
+`mise ls-remote` lists the repository's tags; a leading `v` on tags like `v1.2.3` is stripped from the listed version (mise convention) and resolved back to the tag on install. If the repository has no (matching) tags, the current HEAD commit hash is listed instead, so `@latest` still resolves to a reproducible pin.
+
+To install from a path inside the repository (moon's `PATH_IN_REPO`), append a `#path` fragment to the URL:
+
+```toml
+[tools]
+"moon:https://github.com/owner/repo#cmd/tool-a" = "main"
+"moon:https://github.com/owner/repo#cmd/tool-b" = "main"
+"moon:https://github.com/owner/repo#tools/..." = "main"   # all main packages under tools/
 ```
 
-4. Test execution:
-```bash
-mise exec <BACKEND>:<some-tool>@latest -- <some-tool> --version
+Because the fragment is part of the tool name, tools sharing one repository stay distinct to mise and get separate install directories.
+
+Git tools also support options in `mise.toml`:
+
+```toml
+[tools]
+"moon:https://github.com/owner/repo" = { version = "1.2.3", tag_prefix = "v", path_in_repo = "cmd/mytool" }
 ```
 
-5. Run tests:
+| Option | Effect |
+|--------|--------|
+| `tag_prefix` | Only tags starting with this prefix are listed, with the prefix stripped from the version; it is re-added when resolving the tag on install. A plain leading `v` is already handled without this option — use it for prefixes like `tool-v` in monorepos |
+| `path_in_repo` | Same as the `#path` fragment. Prefer the fragment: mise identifies a tool by name and version only, so two entries that differ only in `path_in_repo` would share one install directory and silently shadow each other |
+
+SCP-style ssh URLs (`git@host:owner/repo`) are not supported because mise splits the tool name from the version at `@`.
+
+## How it works
+
+- **Version listing** (`hooks/backend_list_versions.lua`): for registry tools, queries `https://mooncakes.io/api/v0/modules/<user>/<module>` and returns the module's non-yanked versions. For git tools, runs `git ls-remote --tags` (falling back to the HEAD commit hash when there are no matching tags).
+- **Installation** (`hooks/backend_install.lua`): runs `moon install <source> --bin <install_path>/bin`, which fetches and compiles the executables from source. A bare `user/module` registry spec gets a `/...` suffix appended so every main package in the module is installed. For git tools, one `git ls-remote --tags --heads` call classifies the version into `--tag` (trying `tag_prefix` + version, the verbatim version, then `v` + version), `--branch`, or `--rev`.
+- **Environment** (`hooks/backend_exec_env.lua`): adds `<install_path>/bin` to `PATH`.
+
+Note that the executable name comes from the package's `moon.pkg.json` (usually the last path segment of its main package), which may differ from the module name. Also note that installs compile from source — a large tool can sit for a minute or two at mise's install step with no output while the C compiler runs.
+
+## Development
+
+### Setup
+
 ```bash
+mise install       # install dev tools (lua, stylua, hk, ...)
+hk install         # optional: pre-commit hooks for linting/formatting
+```
+
+### Local testing
+
+```bash
+# Link this checkout as the `moon` backend plugin
+mise plugin link --force moon .
+
+# Exercise the hooks
+mise ls-remote moon:moonbit-community/moongrep
+mise install moon:moonbit-community/moongrep@latest
+mise exec moon:moonbit-community/moongrep@latest -- moongrep --help
+
+# Run the test suite / linters / everything CI runs
 mise run test
-```
-
-6. Run linting:
-```bash
 mise run lint
-```
-
-7. Run full CI suite:
-```bash
 mise run ci
-```
-
-### Code Quality
-
-This template uses [hk](https://hk.jdx.dev) for modern linting and pre-commit hooks:
-
-- **Automatic formatting**: `stylua` formats Lua code
-- **Static analysis**: `luacheck` catches Lua issues  
-- **GitHub Actions linting**: `actionlint` validates workflows
-- **Pre-commit hooks**: Runs all checks automatically on git commit
-
-Manual commands:
-```bash
-hk check      # Run all linters (same as mise run lint)
-hk fix        # Run linters and auto-fix issues
 ```
 
 ### Debugging
 
-Enable debug output:
 ```bash
-mise --debug install <BACKEND>:<tool>@<version>
+mise --debug install moon:<user>/<module>@<version>
 ```
 
 ## Files
 
 - `metadata.lua` – Backend plugin metadata and configuration
-- `hooks/backend_list_versions.lua` – Lists available versions for tools
-- `hooks/backend_install.lua` – Installs specific versions of tools
-- `hooks/backend_exec_env.lua` – Sets up environment variables for tools
+- `hooks/backend_list_versions.lua` – Lists module versions from the mooncakes.io API
+- `hooks/backend_install.lua` – Installs executables via `moon install --bin`
+- `hooks/backend_exec_env.lua` – Adds the install's `bin/` to `PATH`
 - `.github/workflows/ci.yml` – GitHub Actions CI/CD pipeline
 - `mise.toml` – Development tools and configuration
 - `mise-tasks/` – Task scripts for testing
-- `hk.pkl` – Modern linting and pre-commit hook configuration
-- `.luacheckrc` – Lua linting configuration
+- `hk.pkl` – Linting and pre-commit hook configuration
 - `stylua.toml` – Lua formatting configuration
-
-## Backend Examples
-
-### Package Manager Backend (npm-style)
-```lua
--- backend_list_versions.lua
-function PLUGIN:BackendListVersions(ctx)
-    local cmd = require("cmd")
-    local json = require("json")
-    local result = cmd.exec("mypm view " .. ctx.tool .. " versions --json")
-    return {versions = json.decode(result)}
-end
-
--- backend_install.lua  
-function PLUGIN:BackendInstall(ctx)
-    local cmd = require("cmd")
-    cmd.exec("mypm install " .. ctx.tool .. "@" .. ctx.version .. " --prefix " .. ctx.install_path)
-    return {}
-end
-
--- backend_exec_env.lua
-function PLUGIN:BackendExecEnv(ctx)
-    return {
-        env_vars = {
-            {key = "PATH", value = ctx.install_path .. "/bin"}
-        }
-    }
-end
-```
-
-### Binary Download Backend (GitHub releases-style)
-```lua
--- backend_list_versions.lua
-function PLUGIN:BackendListVersions(ctx)
-    local http = require("http")
-    local json = require("json")
-    local resp = http.get({url = "https://api.github.com/repos/owner/" .. ctx.tool .. "/releases"})
-    local releases = json.decode(resp.body)
-    local versions = {}
-    for _, release in ipairs(releases) do
-        table.insert(versions, release.tag_name:gsub("^v", ""))
-    end
-    return {versions = versions}
-end
-
--- backend_install.lua
-function PLUGIN:BackendInstall(ctx)
-    local platform = RUNTIME.osType:lower()
-    local arch = RUNTIME.archType
-    local url = "https://github.com/owner/" .. ctx.tool .. "/releases/download/v" .. ctx.version .. 
-                "/" .. ctx.tool .. "-" .. platform .. "-" .. arch .. ".tar.gz"
-    
-    local http = require("http")
-    local temp_file = ctx.install_path .. "/tool.tar.gz"
-    http.download({url = url, output = temp_file})
-    
-    local cmd = require("cmd")
-    cmd.exec("cd " .. ctx.install_path .. " && tar -xzf tool.tar.gz")
-    cmd.exec("rm " .. temp_file)
-    return {}
-end
-```
-
-## Real-World Examples
-
-- [vfox-npm](https://github.com/jdx/vfox-npm) - Backend for npm packages
-- Study existing mise backends: npm, cargo, pip, gem
-
-## Context Variables Reference
-
-### BackendListVersions Context
-| Variable | Type | Description | Example |
-|----------|------|-------------|---------|
-| `ctx.tool` | string | Tool name | `"prettier"` |
-
-### BackendInstall and BackendExecEnv Context  
-| Variable | Type | Description | Example |
-|----------|------|-------------|---------|
-| `ctx.tool` | string | Tool name | `"prettier"` |
-| `ctx.version` | string | Tool version | `"3.0.0"` |
-| `ctx.install_path` | string | Installation directory | `"/home/user/.local/share/mise/installs/npm/prettier/3.0.0"` |
-
-### Available Lua Modules
-
-Backend plugins have access to these built-in modules:
-
-- `cmd` - Execute shell commands
-- `http` - HTTP client for downloads and API calls  
-- `json` - JSON parsing and encoding
-- `file` - File system operations
-
-## Publishing
-
-1. Ensure all tests pass: `mise run ci`
-2. Create a GitHub repository for your plugin
-3. Push your code
-4. Test with: `mise plugin install mybackend https://github.com/user/mise-mybackend`
-5. (Optional) Request to transfer to [mise-plugins](https://github.com/mise-plugins) organization
-6. Add to the [mise registry](https://github.com/jdx/mise/blob/main/registry.toml) via PR
 
 ## Documentation
 
-- [Backend Plugin Development](https://mise.jdx.dev/backend-plugin-development.html) - Complete guide
-- [Backend Architecture](https://mise.jdx.dev/dev-tools/backend_architecture.html) - How backends work
-- [Lua modules reference](https://mise.jdx.dev/plugin-lua-modules.html) - Available modules
-- [mise-plugins organization](https://github.com/mise-plugins) - Community plugins
+- [Backend Plugin Development](https://mise.jdx.dev/backend-plugin-development.html)
+- [Lua modules reference](https://mise.jdx.dev/plugin-lua-modules.html)
+- [mooncakes.io](https://mooncakes.io) – MoonBit package registry
+- [`moon install` docs](https://docs.moonbitlang.com/) – MoonBit toolchain
 
 ## License
 
