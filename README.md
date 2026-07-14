@@ -48,27 +48,33 @@ Or in `mise.toml`:
 
 ### Git repositories
 
-A tool whose name is an `https://` (or `git://`) URL is installed from that git repository. Like the `go:` backend, the version part may be a tag, a branch name, or a commit hash — the plugin figures out which:
+A tool whose name is an `https://` (or `git://`) URL is installed from that git repository. The tool spec is `moon:<git-url>[#<path/in/repo>]`, where the optional `#` fragment is moon's `PATH_IN_REPO`:
+
+| Tool spec | What it installs |
+|-----------|------------------|
+| `moon:https://host/owner/repo` | The main package at the repository root |
+| `moon:https://host/owner/repo#path/to/pkg` | A single main package inside the repository |
+| `moon:https://host/owner/repo#path/...` | All main packages under a path prefix (`#...` for the whole repository) |
+
+Like the `go:` backend, the version part may be a tag, a branch name, or a commit hash — the plugin figures out which:
 
 ```bash
-mise install "moon:https://github.com/owner/repo@1.2.3"     # tag (also matches v1.2.3)
-mise install "moon:https://github.com/owner/repo@main"      # branch
-mise install "moon:https://github.com/owner/repo@abc1234"   # commit hash
-mise install "moon:https://github.com/owner/repo@latest"    # newest tag, or HEAD commit if untagged
+mise install "moon:https://github.com/owner/repo@1.2.3"           # tag (also matches v1.2.3)
+mise install "moon:https://github.com/owner/repo@main"            # branch
+mise install "moon:https://github.com/owner/repo@abc1234"         # commit hash
+mise install "moon:https://github.com/owner/repo@latest"          # newest tag, or HEAD commit if untagged
+mise install "moon:https://github.com/owner/repo#cmd/tool@main"   # main package under cmd/tool
 ```
 
 `mise ls-remote` lists the repository's tags; a leading `v` on tags like `v1.2.3` is stripped from the listed version (mise convention) and resolved back to the tag on install. If the repository has no (matching) tags, the current HEAD commit hash is listed instead, so `@latest` still resolves to a reproducible pin.
 
-To install from a path inside the repository (moon's `PATH_IN_REPO`), append a `#path` fragment to the URL:
+Because the `#` fragment is part of the tool name, tools sharing one repository stay distinct to mise and get separate install directories:
 
 ```toml
 [tools]
 "moon:https://github.com/owner/repo#cmd/tool-a" = "main"
 "moon:https://github.com/owner/repo#cmd/tool-b" = "main"
-"moon:https://github.com/owner/repo#tools/..." = "main"   # all main packages under tools/
 ```
-
-Because the fragment is part of the tool name, tools sharing one repository stay distinct to mise and get separate install directories.
 
 Git tools also support options in `mise.toml`:
 
@@ -86,8 +92,8 @@ SCP-style ssh URLs (`git@host:owner/repo`) are not supported because mise splits
 
 ## How it works
 
-- **Version listing** (`hooks/backend_list_versions.lua`): for registry tools, queries `https://mooncakes.io/api/v0/modules/<user>/<module>` and returns the module's non-yanked versions. For git tools, runs `git ls-remote --tags` (falling back to the HEAD commit hash when there are no matching tags).
-- **Installation** (`hooks/backend_install.lua`): runs `moon install <source> --bin <install_path>/bin`, which fetches and compiles the executables from source. A bare `user/module` registry spec gets a `/...` suffix appended so every main package in the module is installed. For git tools, one `git ls-remote --tags --heads` call classifies the version into `--tag` (trying `tag_prefix` + version, the verbatim version, then `v` + version), `--branch`, or `--rev`.
+- **Version listing** (`hooks/backend_list_versions.lua`): for registry tools, queries `https://mooncakes.io/api/v0/modules/<user>/<module>` and returns the module's non-yanked versions. For git tools, runs `git ls-remote --tags` (falling back to the HEAD commit hash when there are no matching tags); a `#path` fragment is stripped first, since versions belong to the repository.
+- **Installation** (`hooks/backend_install.lua`): runs `moon install <source> --bin <install_path>/bin`, which fetches and compiles the executables from source. A bare `user/module` registry spec gets a `/...` suffix appended so every main package in the module is installed. For git tools, the `#path` fragment (or `path_in_repo` option) becomes moon's `PATH_IN_REPO` argument, and one `git ls-remote --tags --heads` call classifies the version into `--tag` (trying `tag_prefix` + version, the verbatim version, then `v` + version), `--branch`, or `--rev`.
 - **Environment** (`hooks/backend_exec_env.lua`): adds `<install_path>/bin` to `PATH`.
 
 Note that the executable name comes from the package's `moon.pkg.json` (usually the last path segment of its main package), which may differ from the module name. Also note that installs compile from source — a large tool can sit for a minute or two at mise's install step with no output while the C compiler runs.
