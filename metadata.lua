@@ -7,7 +7,7 @@ PLUGIN = { -- luacheck: ignore
     name = "moon",
 
     -- Required: Plugin version (not the tool versions)
-    version = "0.0.1",
+    version = "0.0.2",
 
     -- Required: Brief description of the backend and tools it manages
     description = "A mise backend plugin that installs MoonBit executables from mooncakes.io via `moon install`",

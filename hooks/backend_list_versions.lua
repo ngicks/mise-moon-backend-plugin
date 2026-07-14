@@ -62,7 +62,8 @@ local function list_git_versions(url, options)
 
     local versions = {}
     local seen = {}
-    for line in out:gmatch("[^\n]+") do
+    -- split on \r too so CRLF output on Windows cannot leak into ref names
+    for line in out:gmatch("[^\r\n]+") do
         local tag = line:match("refs/tags/(.+)$")
         -- skip peeled entries (`tag^{}`) that ls-remote emits for annotated tags
         if tag and not tag:match("%^{}$") then

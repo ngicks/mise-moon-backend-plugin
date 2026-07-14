@@ -63,7 +63,8 @@ local function git_source_args(url, version, options)
     end
 
     local tags, heads = {}, {}
-    for line in out:gmatch("[^\n]+") do
+    -- split on \r too so CRLF output on Windows cannot leak into ref names
+    for line in out:gmatch("[^\r\n]+") do
         local tag = line:match("refs/tags/(.+)$")
         if tag then
             tags[tag:gsub("%^{}$", "")] = true
