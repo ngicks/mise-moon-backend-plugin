@@ -90,10 +90,45 @@ Git tools also support options in `mise.toml`:
 
 SCP-style ssh URLs (`git@host:owner/repo`) are not supported because mise splits the tool name from the version at `@`.
 
+### Sandboxed builds
+
+Unlike `tag_prefix` and `path_in_repo` (git-only), the `sandbox` option applies to **any** tool — registry or git. When set, the plugin runs `moon install` inside a container runtime instead of on the host:
+
+```toml
+[tools."moon:moonbit-community/moongrep"]
+version = "latest"
+sandbox = { runtime = "docker", image = "moonbit:latest", options = [
+    "--mount",
+    "type=bind,src=/etc/ssl/certs/ca-certificates.crt,dst=/etc/ssl/certs/ca-certificates.crt,ro",
+] }
+```
+
+(The example option bind-mounts the host CA bundle read-only, for images that don't bake in `ca-certificates` — `moon install` fetches sources over TLS.)
+
+The plugin composes the build as:
+
+```
+"<runtime>" run --rm --mount type=bind,src="<install_path>,dst=<install_path>" "<opt1>" ... "<image>" moon install <source> --bin "<install_path>/bin"
+```
+
+The runtime, each `options` element, the bind-mount paths, and the image are each double-quoted so values with spaces survive intact. That also means a flag and its value written with a space between them, like `--mount <spec>`, must be two separate list elements — as one element it would reach the runtime as a single (invalid) argument.
+
+The install path is bind-mounted at the same path inside the container, so `--bin` writes the built binaries straight to the host install directory.
+
+| Field | Effect |
+|-------|--------|
+| `runtime` | Required. The container CLI to invoke — either a bare name or a path to an executable. Any docker-CLI-compatible runtime works (`docker`, `podman`, `nerdctl`) |
+| `image` | Required. The image to run the build in. It must contain the MoonBit toolchain (`moon`), and a C compiler as well for native targets |
+| `options` | Optional. Extra arguments passed to `<runtime> run`, e.g. `["--memory=2g"]`. Must be a list of strings |
+
+The version classification for git tools (`git ls-remote`) still runs on the host; only the `moon install` build is sandboxed.
+
+An example image definition lives in [`sandbox/`](./sandbox): a `Containerfile` with the MoonBit toolchain, git, and a C compiler, plus a podman quadlet `.build` unit (`moonbit-sandbox.build`) that builds it as `localhost/moonbit-sandbox:latest` via systemd.
+
 ## How it works
 
 - **Version listing** (`hooks/backend_list_versions.lua`): for registry tools, queries `https://mooncakes.io/api/v0/modules/<user>/<module>` and returns the module's non-yanked versions. For git tools, runs `git ls-remote --tags` (falling back to the HEAD commit hash when there are no matching tags); a `#path` fragment is stripped first, since versions belong to the repository.
-- **Installation** (`hooks/backend_install.lua`): runs `moon install <source> --bin <install_path>/bin`, which fetches and compiles the executables from source. A bare `user/module` registry spec gets a `/...` suffix appended so every main package in the module is installed. For git tools, the `#path` fragment (or `path_in_repo` option) becomes moon's `PATH_IN_REPO` argument, and one `git ls-remote --tags --heads` call classifies the version into `--tag` (trying `tag_prefix` + version, the verbatim version, then `v` + version), `--branch`, or `--rev`.
+- **Installation** (`hooks/backend_install.lua`): runs `moon install <source> --bin <install_path>/bin`, which fetches and compiles the executables from source. A bare `user/module` registry spec gets a `/...` suffix appended so every main package in the module is installed. For git tools, the `#path` fragment (or `path_in_repo` option) becomes moon's `PATH_IN_REPO` argument, and one `git ls-remote --tags --heads` call classifies the version into `--tag` (trying `tag_prefix` + version, the verbatim version, then `v` + version), `--branch`, or `--rev`. When the `sandbox` option is set, the `moon install` build is wrapped in `"<runtime>" run --rm --mount type=bind,src="<install_path>,dst=<install_path>" "<opt1>" ... "<image>" …` (runtime, each option, the bind-mount paths, and the image each double-quoted) so it runs inside a container while the built binaries land on the host.
 - **Environment** (`hooks/backend_exec_env.lua`): adds `<install_path>/bin` to `PATH`.
 
 Note that the executable name comes from the package's `moon.pkg.json` (usually the last path segment of its main package), which may differ from the module name. Also note that installs compile from source — a large tool can sit for a minute or two at mise's install step with no output while the C compiler runs.
@@ -136,6 +171,7 @@ mise --debug install moon:<user>/<module>@<version>
 - `hooks/backend_list_versions.lua` – Lists module versions from the mooncakes.io API
 - `hooks/backend_install.lua` – Installs executables via `moon install --bin`
 - `hooks/backend_exec_env.lua` – Adds the install's `bin/` to `PATH`
+- `sandbox/` – Example sandbox image (`Containerfile`) and quadlet `.build` unit
 - `.github/workflows/ci.yml` – GitHub Actions CI/CD pipeline
 - `mise.toml` – Development tools and configuration
 - `mise-tasks/` – Task scripts for testing

@@ -106,10 +106,71 @@ local function git_source_args(url, version, options)
     return source .. " " .. ref
 end
 
+--- Validates the per-tool `sandbox` option and builds the container-runtime
+--- prefix that wraps `moon install`. Returns nil when no sandbox is configured.
+--- The install path is bind-mounted at the same path inside the container so the
+--- `--bin "<install_path>/bin"` argument stays valid and built binaries land on
+--- the host. Works for both registry and git tools.
+--- @param sandbox table|nil The `sandbox` option table from mise.toml
+--- @param install_path string Install directory, bind-mounted into the container
+--- @return string|nil prefix Runtime invocation up to (excluding) `moon`, or nil
+--- @return string|nil runtime The runtime name/path, for the failure hint
+local function sandbox_prefix(sandbox, install_path)
+    if sandbox == nil then
+        return nil
+    end
+    if type(sandbox) ~= "table" then
+        error('Invalid sandbox option: expected a table like { runtime = "docker", image = "moonbit:latest" }')
+    end
+
+    local runtime = sandbox.runtime
+    if type(runtime) ~= "string" or runtime == "" then
+        error("Invalid sandbox option: `runtime` is required and must be a non-empty string")
+    end
+
+    local image = sandbox.image
+    if type(image) ~= "string" or image == "" then
+        error("Invalid sandbox option: `image` is required and must be a non-empty string")
+    end
+
+    -- runtime may be a bare command name or a path to an executable, so quote it.
+    local prefix = '"'
+        .. runtime
+        .. '" run --rm --mount type=bind,src="'
+        .. install_path
+        .. ",dst="
+        .. install_path
+        .. '"'
+
+    local options = sandbox.options
+    if options ~= nil then
+        if type(options) ~= "table" then
+            error("Invalid sandbox option: `options` must be a sequence table of strings")
+        end
+        local count = 0
+        for _ in pairs(options) do
+            count = count + 1
+        end
+        if count ~= #options then
+            error("Invalid sandbox option: `options` must be a sequence table of strings")
+        end
+        for i = 1, #options do
+            if type(options[i]) ~= "string" then
+                error("Invalid sandbox option: `options[" .. i .. "]` must be a string")
+            end
+            prefix = prefix .. ' "' .. options[i] .. '"'
+        end
+    end
+
+    return prefix .. ' "' .. image .. '"', runtime
+end
+
 --- Installs a specific version of a tool
 --- Documentation: https://mise.jdx.dev/backend-plugin-development.html#backendinstall
 --- Runs `moon install <source> --bin <install_path>/bin`, which fetches the tool
 --- from mooncakes.io or a git repository and builds its main package(s) from source.
+--- If a `sandbox` option is set, the build is wrapped in a container runtime
+--- (`<runtime> run --rm --mount type=bind,src=<install_path>,dst=<install_path> <options> <image> ...`).
 --- @param ctx {tool: string, version: string, install_path: string, options: table} Context
 --- @return table Empty table on success
 function PLUGIN:BackendInstall(ctx)
@@ -127,9 +188,11 @@ function PLUGIN:BackendInstall(ctx)
         error("Install path cannot be empty")
     end
 
+    local options = ctx.options or {}
+
     local source_args
     if tool:match("^https?://") or tool:match("^git://") then
-        source_args = git_source_args(tool, version, ctx.options or {})
+        source_args = git_source_args(tool, version, options)
     else
         source_args = registry_source_args(tool, version)
     end
@@ -138,15 +201,23 @@ function PLUGIN:BackendInstall(ctx)
     local file = require("file")
     local bin_dir = file.join_path(install_path, "bin")
 
-    local install_cmd = "moon install " .. source_args .. ' --bin "' .. bin_dir .. '"'
+    local moon_cmd = "moon install " .. source_args .. ' --bin "' .. bin_dir .. '"'
+
+    -- A sandbox wraps the build in a container runtime; otherwise it runs directly
+    -- on the host. The failure hint points at whichever provides the toolchain.
+    local prefix, runtime = sandbox_prefix(options.sandbox, install_path)
+    local install_cmd, hint
+    if prefix then
+        install_cmd = prefix .. " " .. moon_cmd
+        hint = "does the image provide the MoonBit toolchain and is " .. runtime .. " runnable?"
+    else
+        install_cmd = moon_cmd
+        hint = "is the MoonBit toolchain installed and on PATH?"
+    end
+
     local ok, output = pcall(cmd.exec, install_cmd)
     if not ok then
-        error(
-            "Failed to run `"
-                .. install_cmd
-                .. "` (is the MoonBit toolchain installed and on PATH?): "
-                .. tostring(output)
-        )
+        error("Failed to run `" .. install_cmd .. "` (" .. hint .. "): " .. tostring(output))
     end
 
     return {}

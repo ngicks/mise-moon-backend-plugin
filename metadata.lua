@@ -7,7 +7,7 @@ PLUGIN = { -- luacheck: ignore
     name = "moon",
 
     -- Required: Plugin version (not the tool versions)
-    version = "0.0.2",
+    version = "0.0.3",
 
     -- Required: Brief description of the backend and tools it manages
     description = "A mise backend plugin that installs MoonBit executables from mooncakes.io via `moon install`",
@@ -31,5 +31,6 @@ PLUGIN = { -- luacheck: ignore
         "moon:https://host/repo installs from a git repository (version = tag, branch, or commit)",
         "moon:https://host/repo#path/in/repo installs from a path inside a git repository",
         "Git tools support tag_prefix and path_in_repo options in mise.toml",
+        "Any tool can set a sandbox option (runtime/image/options) to run the build inside a container runtime",
     },
 }

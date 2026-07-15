@@ -1,0 +1,30 @@
+# syntax=docker/dockerfile:1
+
+# intentionally not strict: I usually use oble-20260610 but here I'm using loose one, because quadlet picks newer image if updated
+FROM docker.io/library/ubuntu:24.04
+
+ARG SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"
+ARG HTTP_PROXY
+ARG HTTPS_PROXY
+ARG NO_PROXY
+ARG http_proxy
+ARG https_proxy
+ARG no_proxy
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    --mount=type=secret,id=certs,target=/etc/ssl/certs/ca-certificates.crt \
+<<EOF
+    rm -f /etc/apt/apt.conf.d/docker-clean
+    echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+    apt-get update
+    apt-get install -yqq --no-install-recommends \
+        build-essential \
+        curl \
+        git \
+        libssl-dev \
+        pkg-config
+    curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+    export PATH="/root/.moon/bin:${PATH}"
+    moon update
+EOF

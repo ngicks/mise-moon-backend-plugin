@@ -1,0 +1,12 @@
+[Unit]
+Description=Build the MoonBit sandbox image for mise-moon-backend-plugin
+
+[Build]
+ImageTag=localhost/devenv/moonbit-installer-sandbox:latest
+File=moonbit-installer-sandbox/Containerfile
+SetWorkingDirectory=unit
+Pull=newer
+Secret=id=certs,src=/etc/ssl/certs/ca-certificates.crt
+
+[Install]
+WantedBy=default.target

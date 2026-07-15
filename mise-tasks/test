@@ -51,4 +51,59 @@ echo "Testing git version listing with a #path fragment..."
 mise ls-remote "moon:${TEST_GIT_URL}#..." | grep -qE '^[0-9a-f]{12}$'
 echo "✓ Fragment tool names work"
 
+echo "Testing sandboxed installation with a stub container runtime..."
+sandbox_dir=$(mktemp -d)
+trap 'rm -rf "${tmpdir}" "${sandbox_dir}"' EXIT
+# A stub that emulates the docker CLI shape the plugin composes:
+#   run --rm --mount type=bind,src=<x>,dst=<x> <opts...> <image> moon install ...
+# It logs the full argv, then drops everything up to and including the sentinel
+# image name and execs the remaining command (the real `moon install`) on the host.
+cat > "${sandbox_dir}/docker-stub" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+log="$(dirname "$0")/argv.log"
+printf '%s\n' "$@" >> "${log}"
+sentinel="sandbox-test-image"
+seen_image=0
+cmd=()
+for arg in "$@"; do
+    if [[ "${seen_image}" -eq 0 ]]; then
+        if [[ "${arg}" == "${sentinel}" ]]; then
+            seen_image=1
+        fi
+        continue
+    fi
+    cmd+=("${arg}")
+done
+if [[ "${#cmd[@]}" -eq 0 ]]; then
+    echo "docker-stub: no command found after image name '${sentinel}'" >&2
+    exit 1
+fi
+exec "${cmd[@]}"
+STUB
+chmod +x "${sandbox_dir}/docker-stub"
+cat > "${sandbox_dir}/mise.toml" <<EOF
+[tools]
+# The spaced option only survives as one argv entry if the plugin double-quotes it.
+"moon:${TEST_TOOL}" = { version = "latest", sandbox = { runtime = "${sandbox_dir}/docker-stub", options = ["--sentinel-opt", "--label=sandbox test"], image = "sandbox-test-image" } }
+EOF
+mise trust "${sandbox_dir}/mise.toml"
+# The registry install above cached this tool@version, so drop it to force the
+# sandboxed build to actually run.
+mise uninstall "moon:${TEST_TOOL}@latest" || true
+(cd "${sandbox_dir}" && mise install)
+argv_log="${sandbox_dir}/argv.log"
+install_path=$(mise where "moon:${TEST_TOOL}@latest")
+test -f "${argv_log}"
+grep -qxF 'run' "${argv_log}"
+grep -qxF -- '--rm' "${argv_log}"
+grep -qxF -- '--mount' "${argv_log}"
+grep -qxF "type=bind,src=${install_path},dst=${install_path}" "${argv_log}"
+grep -qxF -- '--sentinel-opt' "${argv_log}"
+# A whole-line match: proves the spaced option arrived as a single argv entry
+# (a quoting regression in backend_install.lua would split it across two lines).
+grep -qxF -- '--label=sandbox test' "${argv_log}"
+grep -qxF 'sandbox-test-image' "${argv_log}"
+echo "✓ Sandboxed installation composes the container-runtime command"
+
 echo "✓ All tests passed"
