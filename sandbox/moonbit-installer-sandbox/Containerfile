@@ -28,3 +28,5 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     export PATH="/root/.moon/bin:${PATH}"
     moon update
 EOF
+
+ENV PATH="/root/.moon/bin:${PATH}"
