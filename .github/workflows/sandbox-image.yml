@@ -1,0 +1,128 @@
+name: Sandbox image
+
+# Publishes the sandbox image to GHCR so users pull it at runtime instead of
+# building locally. A cheap check job polls MoonBit's release channel and the
+# full build+push only runs when the upstream toolchain actually changed
+# (keyed on the release tarball's ETag — `moon version` alone misses moonc/core
+# updates) or when the last build is over a week old, so the baked-in mooncakes
+# registry index and Ubuntu base layers don't go stale.
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  push:
+    branches: [main]
+    paths:
+      - Containerfile/ubuntu.Containerfile
+      - .github/workflows/sandbox-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: sandbox-image
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}/moonbit-installer-sandbox
+  # tag prefix, matching Containerfile/<variant>.Containerfile
+  VARIANT: ubuntu
+  ETAG_LABEL: io.github.ngicks.mise-moon-backend-plugin.upstream-etag
+  MAX_AGE_DAYS: "7"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.decide.outputs.changed }}
+      etag: ${{ steps.upstream.outputs.etag }}
+    steps:
+      - name: Read upstream release ETag
+        id: upstream
+        run: |
+          etag="$(curl -fsSI --retry 3 https://cli.moonbitlang.com/binaries/latest/moonbit-linux-x86_64.tar.gz \
+            | tr -d '"\r' | awk 'tolower($1)=="etag:" {print $2}')"
+          if [ -z "$etag" ]; then
+            echo "failed to read upstream ETag" >&2
+            exit 1
+          fi
+          echo "etag=$etag" >> "$GITHUB_OUTPUT"
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Read marker from published image
+        id: published
+        run: |
+          config="$(docker buildx imagetools inspect "$IMAGE:$VARIANT-latest" --format '{{ json .Image }}' 2>/dev/null || true)"
+          {
+            echo "etag=$(jq -r --arg l "$ETAG_LABEL" '.config.Labels[$l] // empty' <<<"${config:-null}")"
+            echo "created=$(jq -r '.created // empty' <<<"${config:-null}")"
+          } >> "$GITHUB_OUTPUT"
+      - name: Decide whether to rebuild
+        id: decide
+        run: |
+          changed=true
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            reason="non-schedule trigger (${{ github.event_name }})"
+          elif [ "${{ steps.upstream.outputs.etag }}" != "${{ steps.published.outputs.etag }}" ]; then
+            reason="upstream toolchain changed"
+          elif [ -z "${{ steps.published.outputs.created }}" ] \
+            || [ "$(date -ud '${{ steps.published.outputs.created }}' +%s)" -lt "$(date -ud "$MAX_AGE_DAYS days ago" +%s)" ]; then
+            reason="published image older than $MAX_AGE_DAYS days, refreshing registry index"
+          else
+            changed=false
+            reason="up to date, skipping build"
+          fi
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
+          echo "$reason"
+
+  build-push:
+    needs: check
+    if: needs.check.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build
+        uses: docker/build-push-action@v6
+        with:
+          context: Containerfile
+          file: Containerfile/${{ env.VARIANT }}.Containerfile
+          load: true
+          tags: ${{ env.IMAGE }}:${{ env.VARIANT }}-candidate
+          labels: |
+            ${{ env.ETAG_LABEL }}=${{ needs.check.outputs.etag }}
+      - name: Read MoonBit toolchain version
+        id: moon
+        run: |
+          # first line looks like: moon 0.1.20260713 (75c7e1f 2026-07-13)
+          version="$(docker run --rm "$IMAGE:$VARIANT-candidate" moon version | awk 'NR==1 {print $2}')"
+          case "$version" in
+            *[!a-zA-Z0-9_.-]* | "") echo "unexpected moon version output: '$version'" >&2; exit 1 ;;
+          esac
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"
+      - name: Push
+        uses: docker/build-push-action@v6
+        with:
+          context: Containerfile
+          file: Containerfile/${{ env.VARIANT }}.Containerfile
+          push: true
+          # keep the pushed artifact a plain single-arch manifest: the check
+          # job's `imagetools inspect --format '{{ json .Image }}'` expects the
+          # image config directly, not a provenance-attestation index
+          provenance: false
+          tags: |
+            ${{ env.IMAGE }}:${{ env.VARIANT }}-latest
+            ${{ env.IMAGE }}:${{ env.VARIANT }}-${{ steps.moon.outputs.version }}
+            ${{ env.IMAGE }}:${{ env.VARIANT }}-${{ steps.moon.outputs.date }}
+          labels: |
+            ${{ env.ETAG_LABEL }}=${{ needs.check.outputs.etag }}

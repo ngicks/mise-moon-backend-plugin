@@ -2,8 +2,8 @@
 Description=Build the MoonBit sandbox image for mise-moon-backend-plugin
 
 [Build]
-ImageTag=localhost/devenv/moonbit-installer-sandbox:latest
-File=moonbit-installer-sandbox/Containerfile
+ImageTag=localhost/ngicks/moonbit-installer-sandbox:ubuntu-latest
+File=ubuntu.Containerfile
 SetWorkingDirectory=unit
 Pull=newer
 Secret=id=certs,src=/etc/ssl/certs/ca-certificates.crt

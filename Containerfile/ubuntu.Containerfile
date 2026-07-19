@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# intentionally not strict: I usually use oble-20260610 but here I'm using loose one, because quadlet picks newer image if updated
+# intentionally not strict: CI rebuilds (and the quadlet's Pull=newer) pick up base image updates
 FROM docker.io/library/ubuntu:24.04
 
 ARG SSL_CERT_FILE="/etc/ssl/certs/ca-certificates.crt"

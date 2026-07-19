@@ -97,13 +97,12 @@ Unlike `tag_prefix` and `path_in_repo` (git-only), the `sandbox` option applies 
 ```toml
 [tools."moon:moonbit-community/moongrep"]
 version = "latest"
-sandbox = { runtime = "docker", image = "moonbit:latest", options = [
-    "--mount",
-    "type=bind,src=/etc/ssl/certs/ca-certificates.crt,dst=/etc/ssl/certs/ca-certificates.crt,ro",
+sandbox = { runtime = "docker", image = "ghcr.io/ngicks/mise-moon-backend-plugin/moonbit-installer-sandbox:ubuntu-latest", options = [
+    "--pull=always",
 ] }
 ```
 
-(The example option bind-mounts the host CA bundle read-only, for images that don't bake in `ca-certificates` — `moon install` fetches sources over TLS.)
+The runtime pulls the image on first use, so nothing needs to be pre-built. `--pull=always` keeps `ubuntu-latest` fresh on every install (with podman, `--pull=newer` re-pulls only when the registry has a newer image); drop the option to keep using the locally cached image, or pin a toolchain-version tag instead of `ubuntu-latest`.
 
 The plugin composes the build as:
 
@@ -123,7 +122,9 @@ The install path is bind-mounted at the same path inside the container, so `--bi
 
 The version classification for git tools (`git ls-remote`) still runs on the host; only the `moon install` build is sandboxed.
 
-An example image definition lives in [`sandbox/`](./sandbox): a `Containerfile` with the MoonBit toolchain, git, and a C compiler, plus a podman quadlet `.build` unit (`moonbit-sandbox.build`) that builds it as `localhost/moonbit-sandbox:latest` via systemd.
+The image is defined in [`Containerfile/ubuntu.Containerfile`](./Containerfile/ubuntu.Containerfile): the MoonBit toolchain, git, and a C compiler on Ubuntu. A GitHub Actions workflow ([`sandbox-image.yml`](./.github/workflows/sandbox-image.yml)) polls MoonBit's release channel every 6 hours and rebuilds only when the upstream toolchain actually changed (tracked via the release tarball's ETag, stamped on the image as an OCI label), or when the last build is over a week old so the baked-in mooncakes registry index and base layers stay fresh. Images are pushed to GHCR as `ghcr.io/ngicks/mise-moon-backend-plugin/moonbit-installer-sandbox`, with tags prefixed by the Containerfile variant: `ubuntu-latest`, plus `ubuntu-<moon version>` and `ubuntu-<YYYYMMDD>` (build date) for pinning.
+
+If you'd rather build locally than pull from GHCR, `Containerfile/` also keeps a podman quadlet `.build` unit (`moonbit-installer-sandbox.build`) that builds the same `ubuntu.Containerfile` as `localhost/ngicks/moonbit-installer-sandbox:ubuntu-latest` via systemd.
 
 ## How it works
 
@@ -171,8 +172,9 @@ mise --debug install moon:<user>/<module>@<version>
 - `hooks/backend_list_versions.lua` – Lists module versions from the mooncakes.io API
 - `hooks/backend_install.lua` – Installs executables via `moon install --bin`
 - `hooks/backend_exec_env.lua` – Adds the install's `bin/` to `PATH`
-- `sandbox/` – Example sandbox image (`Containerfile`) and quadlet `.build` unit
+- `Containerfile/` – Sandbox image definition (`ubuntu.Containerfile`) and an optional quadlet `.build` unit for local builds
 - `.github/workflows/ci.yml` – GitHub Actions CI/CD pipeline
+- `.github/workflows/sandbox-image.yml` – Polls MoonBit releases, builds & pushes the sandbox image to GHCR
 - `mise.toml` – Development tools and configuration
 - `mise-tasks/` – Task scripts for testing
 - `hk.pkl` – Linting and pre-commit hook configuration
